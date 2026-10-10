@@ -190,7 +190,7 @@ func main() {
 			privacyMsg := "🔒 *Политика конфиденциальности*\n\n" +
 				"Мы храним только ваш Telegram ID и тексты созданных задач для работы списка дел.\n" +
 				"Данные не передаются третьим лицам.\n\n" +
-				"Подробные условия: [ссылка на Telegraph или GitHub]"
+				"Подробные условия: https://github.com/killkah/TasksTrackerTGBOT/blob/main/Privacy.md"
 
 			msg := tgbotapi.NewMessage(chatID, privacyMsg)
 			msg.ParseMode = "Markdown"
