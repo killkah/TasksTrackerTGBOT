@@ -186,6 +186,15 @@ func main() {
 			DeleteTask(id, userID, db)
 			msg := tgbotapi.NewMessage(chatID, "Задача удалена.")
 			bot.Send(msg)
+		case text == "/privacy":
+			privacyMsg := "🔒 *Политика конфиденциальности*\n\n" +
+				"Мы храним только ваш Telegram ID и тексты созданных задач для работы списка дел.\n" +
+				"Данные не передаются третьим лицам.\n\n" +
+				"Подробные условия: [ссылка на Telegraph или GitHub]"
+
+			msg := tgbotapi.NewMessage(chatID, privacyMsg)
+			msg.ParseMode = "Markdown"
+			bot.Send(msg)
 		}
 	}
 	// for {
