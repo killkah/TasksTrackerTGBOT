@@ -68,6 +68,22 @@ func TaskExists(id int, userID int64, db *sql.DB) (bool, error) {
 	err := db.QueryRow(query, id, userID).Scan(&exists)
 	return exists, err
 }
+func CheckUserConsent(userID int64, db *sql.DB) (bool, error) {
+	var accepted bool
+	err := db.QueryRow("SELECT accepted_terms FROM users WHERE user_id = ?", userID).Scan(&accepted)
+	if err == sql.ErrNoRows {
+		return false, nil // Пользователя ещё нет в БД
+	}
+	return accepted, err
+}
+func SaveUserConsent(userID int64, db *sql.DB) error {
+	_, err := db.Exec(
+		"INSERT INTO users (user_id, accepted_terms, accepted_at) VALUES (?, 1, CURRENT_TIMESTAMP) "+
+			"ON CONFLICT(user_id) DO UPDATE SET accepted_terms = 1, accepted_at = CURRENT_TIMESTAMP",
+		userID,
+	)
+	return err
+}
 func ErrorHandler(err error) {
 	fmt.Println("An error occurred:", err)
 }

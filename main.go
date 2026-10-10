@@ -45,8 +45,15 @@ func main() {
 		title TEXT NOT NULL,
 		done BOOLEAN NOT NULL DEFAULT 0
 	);`
+	createTableUsers := `
+	CREATE TABLE IF NOT EXISTS users (
+    user_id INTEGER PRIMARY KEY,
+    accepted_terms BOOLEAN DEFAULT 0,
+    accepted_at DATETIME
+	);`
 
 	_, err = db.Exec(createTableQuery)
+	_, err = db.Exec(createTableUsers)
 	if err != nil {
 		ErrorHandler(err)
 	}
@@ -77,13 +84,58 @@ func main() {
 
 	// 4. Бесконечный цикл обработки входящих сообщений
 	for update := range updates {
-		if update.Message == nil { // Игнорируем не-текстовые обновления
+		// 1. ОБРАБОТКА НАЖАТИЯ INLINE-КНОПОК (CallbackQuery)
+		if update.CallbackQuery != nil {
+			callback := update.CallbackQuery
+			chatID := callback.Message.Chat.ID
+			userID := callback.From.ID
+
+			// ОБЯЗАТЕЛЬНО: Отвечаем Telegram, чтобы кнопка перестала крутиться
+			callbackAnswer := tgbotapi.NewCallback(callback.ID, "Условия приняты!")
+			if _, err := bot.Request(callbackAnswer); err != nil {
+				log.Println("Ошибка отправки CallbackAnswer:", err)
+			}
+
+			// Проверяем, какая именно кнопка была нажата
+			if callback.Data == "accept_terms" {
+				// Сохраняем факт согласия в БД
+				err := SaveUserConsent(userID, db)
+				if err != nil {
+					bot.Send(tgbotapi.NewMessage(chatID, "Ошибка сохранения согласия в БД."))
+					continue
+				}
+
+				// (Опционально) Удаляем или редактируем сообщение с кнопкой, чтобы нельзя было нажать повторно
+				editMsg := tgbotapi.NewEditMessageText(chatID, callback.Message.MessageID, "✅ Вы успешно приняли условия использования!")
+				bot.Send(editMsg)
+
+				// Отправляем приветственное сообщение
+				welcomeMsg := tgbotapi.NewMessage(chatID, "🎉 Доступ открыт!\n\nИспользуйте команду /add <текст>, чтобы добавить первую задачу.")
+				bot.Send(welcomeMsg)
+			}
+			continue // Переходим к следующему update
+		}
+
+		// 2. ИГНОРИРУЕМ ВСЕ СООБЩЕНИЯ, ЕСЛИ ЭТО НЕ ТЕКСТ
+		if update.Message == nil {
 			continue
 		}
 
-		text := update.Message.Text
 		chatID := update.Message.Chat.ID
 		userID := update.Message.From.ID
+		text := update.Message.Text
+
+		// 3. БЛОКИРОВКА ДОСТУПА: Проверяем согласие перед вызовом любых команд
+		accepted, err := CheckUserConsent(userID, db)
+		if err != nil {
+			log.Println("Ошибка проверки согласия:", err)
+		}
+
+		if !accepted && text != "/start" {
+			msg := tgbotapi.NewMessage(chatID, "⚠️ Чтобы пользоваться ботом, нужно принять условия. Напишите /start")
+			bot.Send(msg)
+			continue
+		}
 		// Обработка команд
 		switch {
 		// Команда /start
@@ -98,8 +150,8 @@ func main() {
 			if !accepted {
 				msgText := "👋 **Добро пожаловать в Таск-менеджер!**\n\n" +
 					"Для использования бота необходимо ознакомиться и согласиться с " +
-					"[Политикой конфиденциальности]() " +
-					"и [Согласием на обработку данных](https://github.com/killkah/TasksTrackerTGBOT/blob/main/Privacy.md).\n\n" +
+					"[Политикой конфиденциальности](https://github.com/killkah/TasksTrackerTGBOT/blob/main/Privacy.md) " +
+					"и [Согласием на обработку данных](https://github.com/killkah/TasksTrackerTGBOT/blob/main/Consent.md).\n\n" +
 					"Нажимая кнопку «Принять», вы даёте согласие на обработку вашего Telegram ID и создаваемых задач."
 
 				msg := tgbotapi.NewMessage(chatID, msgText)
