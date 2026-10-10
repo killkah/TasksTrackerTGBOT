@@ -110,7 +110,11 @@ func main() {
 				bot.Send(editMsg)
 
 				// Отправляем приветственное сообщение
-				welcomeMsg := tgbotapi.NewMessage(chatID, "🎉 Доступ открыт!\n\nИспользуйте команду /add <текст>, чтобы добавить первую задачу.")
+				welcomeMsg := tgbotapi.NewMessage(chatID, "👋 Привет! Я твой таск-менеджер.\n\n"+
+					"Команды:\n"+
+					"📋 /tasks — Посмотреть все задачи\n"+
+					"➕ /add Текст — Добавить новую задачу\n"+
+					"❌ /delete ID — Удалить задачу по ID")
 				bot.Send(welcomeMsg)
 			}
 			continue // Переходим к следующему update
@@ -169,7 +173,11 @@ func main() {
 			}
 
 			// Если уже давал согласие — выводим стандартную справку
-			msg := tgbotapi.NewMessage(chatID, "Привет! Ты уже зарегистрирован. Введи /tasks для просмотра задач.")
+			msg := tgbotapi.NewMessage(chatID, "👋 Привет! Я твой таск-менеджер.\n\n"+
+				"Команды:\n"+
+				"📋 /tasks — Посмотреть все задачи\n"+
+				"➕ /add Текст — Добавить новую задачу\n"+
+				"❌ /delete ID — Удалить задачу по ID")
 			bot.Send(msg)
 		// Команда /tasks
 		case strings.HasPrefix(text, "/tasks"):
