@@ -196,6 +196,11 @@ func main() {
 				bot.Send(msg)
 				continue
 			}
+			if len(title) > 50 {
+				msg := tgbotapi.NewMessage(chatID, "Слишком длинное название(куда тебе 50).")
+				bot.Send(msg)
+				continue
+			}
 			AddTask(userID, title, false, db)
 			msg := tgbotapi.NewMessage(chatID, "Задача добавлена: "+title)
 			bot.Send(msg)
