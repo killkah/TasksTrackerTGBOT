@@ -87,14 +87,37 @@ func main() {
 		// Обработка команд
 		switch {
 		// Команда /start
-		case strings.HasPrefix(text, "/start"):
-			msgText := "👋 Привет! Я твой таск-менеджер.\n\n" +
-				"Команды:\n" +
-				"📋 /tasks — Посмотреть все задачи\n" +
-				"➕ /add Текст — Добавить новую задачу\n" +
-				"/edit Текст — Изменить статус задачи на противоположный\n" +
-				"❌ /delete ID — Удалить задачу по ID"
-			msg := tgbotapi.NewMessage(chatID, msgText)
+		case text == "/start":
+			// Проверяем в БД, давал ли пользователь согласие ранее
+			accepted, err := CheckUserConsent(userID, db)
+			if err != nil {
+				bot.Send(tgbotapi.NewMessage(chatID, "Ошибка проверки профиля."))
+				continue
+			}
+
+			if !accepted {
+				msgText := "👋 **Добро пожаловать в Таск-менеджер!**\n\n" +
+					"Для использования бота необходимо ознакомиться и согласиться с " +
+					"[Политикой конфиденциальности]() " +
+					"и [Согласием на обработку данных](https://github.com/killkah/TasksTrackerTGBOT/blob/main/Privacy.md).\n\n" +
+					"Нажимая кнопку «Принять», вы даёте согласие на обработку вашего Telegram ID и создаваемых задач."
+
+				msg := tgbotapi.NewMessage(chatID, msgText)
+				msg.ParseMode = "Markdown"
+
+				// Создаём Inline-кнопку для акцепта
+				keyboard := tgbotapi.NewInlineKeyboardMarkup(
+					tgbotapi.NewInlineKeyboardRow(
+						tgbotapi.NewInlineKeyboardButtonData("✅ Принять условия", "accept_terms"),
+					),
+				)
+				msg.ReplyMarkup = keyboard
+				bot.Send(msg)
+				continue
+			}
+
+			// Если уже давал согласие — выводим стандартную справку
+			msg := tgbotapi.NewMessage(chatID, "Привет! Ты уже зарегистрирован. Введи /tasks для просмотра задач.")
 			bot.Send(msg)
 		// Команда /tasks
 		case strings.HasPrefix(text, "/tasks"):
