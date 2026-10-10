@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -33,6 +35,16 @@ func PrintTasks(tasks []Task, chatID int64, bot *tgbotapi.BotAPI) {
 	bot.Send(msg)
 }
 func main() {
+	proxyURL, err := url.Parse("socks5://127.0.0.1:1080")
+	if err != nil {
+		log.Fatalf("Ошибка парсинга URL прокси: %v", err)
+	}
+	// 2. Создаем HTTP-клиент, работающий через прокси
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyURL(proxyURL),
+		},
+	}
 	db, err := sql.Open("sqlite", "./todo.db")
 	if err != nil {
 		ErrorHandler(err)
@@ -67,11 +79,16 @@ func main() {
 	if err != nil {
 		log.Println("Предупреждение: .env файл не найден, пробуем взять из системы")
 	}
-	botToken := os.Getenv("TELEGRAM_APITOKEN")
-	// Подключение к Telegram Bot API
-	bot, err := tgbotapi.NewBotAPI(botToken)
+	// 3. Инициализируем бота с использованием прокси-клиента
+	token := os.Getenv("TELEGRAM_APITOKEN")
+	if token == "" {
+		// Если токен не задан в переменных окружения, укажите его прямо тут:
+		// token = "ТВОЙ_ТОКЕН_БОТА"
+		log.Fatal("TELEGRAM_APITOKEN не установлен")
+	} // Подключение к Telegram Bot API
+	bot, err := tgbotapi.NewBotAPIWithClient(token, tgbotapi.APIEndpoint, httpClient)
 	if err != nil {
-		log.Panic("Ошибка подключения к Telegram:", err)
+		log.Fatalf("Ошибка авторизации бота: %v", err)
 	}
 	bot.Debug = true
 	log.Printf("Авторизован как бот: %s", bot.Self.UserName)
