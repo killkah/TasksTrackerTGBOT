@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+
 	"net/http"
 	"net/url"
 	"os"
@@ -69,6 +70,7 @@ func main() {
 	if err != nil {
 		ErrorHandler(err)
 	}
+	db.Close()
 	fmt.Println("Таблица tasks успешно создана или уже существует.")
 
 	if err != nil {
@@ -223,7 +225,7 @@ func main() {
 			bot.Send(msg)
 		// Команда /edit
 		case strings.HasPrefix(text, "/edit "):
-
+			db, err := sql.Open("sqlite", "./todo.db")
 			idStr := strings.TrimPrefix(text, "/edit ")
 			idStr = strings.TrimSpace(idStr)
 			if idStr == "" {
@@ -265,6 +267,7 @@ func main() {
 				tasks[0].Done = false
 			}
 			EditTask(tasks[0].ID, tasks[0].Done, db)
+			db.Close()
 			msg := tgbotapi.NewMessage(chatID, "Задача успешно обновлена")
 			bot.Send(msg)
 		// Команда /delete
@@ -302,62 +305,4 @@ func main() {
 			bot.Send(msg)
 		}
 	}
-	// for {
-
-	// 	fmt.Println("Выбирете действие: 1 - Посмореть все задачи, 2 - Добавить задачу, 3 - Редактировать задачу, 4 - Удалить задачу, 5 - Выход: ")
-	// 	input, err := reader.ReadString('\n')
-	// 	if err != nil {
-	// 		ErrorHandler(err)
-	// 	}
-
-	// 	action := strings.TrimSpace(input)
-	// 	switch action {
-	// 	case "1":
-	// 		tasks := GetTasks(db)
-	// 		PrintTasks(tasks)
-	// 	case "2":
-	// 		fmt.Print("Введите название задачи: ")
-	// 		title, err := reader.ReadString('\n')
-	// 		if err != nil {
-	// 			ErrorHandler(err)
-	// 		}
-	// 		title = strings.TrimSpace(title)
-	// 		fmt.Print("Введите статус задачи (true/false): ")
-	// 		doneStr, err := reader.ReadString('\n')
-	// 		if err != nil {
-	// 			ErrorHandler(err)
-	// 		}
-	// 		doneStr = strings.TrimSpace(doneStr)
-	// 		done := (doneStr == "true")
-	// 		AddTask(title, done, db)
-	// 	case "3":
-	// 		fmt.Print("Введите название задачи для редактирования: ")
-	// 		title, err := reader.ReadString('\n')
-	// 		if err != nil {
-	// 			ErrorHandler(err)
-	// 		}
-	// 		title = strings.TrimSpace(title)
-	// 		fmt.Print("Введите новый статус задачи (true/false): ")
-	// 		doneStr, err := reader.ReadString('\n')
-	// 		if err != nil {
-	// 			ErrorHandler(err)
-	// 		}
-	// 		doneStr = strings.TrimSpace(doneStr)
-	// 		done := (doneStr == "true")
-	// 		EditTask(title, done, db)
-	// 	case "4":
-	// 		fmt.Print("Введите название задачи для удаления: ")
-	// 		title, err := reader.ReadString('\n')
-	// 		if err != nil {
-	// 			ErrorHandler(err)
-	// 		}
-	// 		title = strings.TrimSpace(title)
-	// 		DeleteTask(title, db)
-	// 	case "5":
-	// 		fmt.Println("Выход из программы.")
-	// 		return
-	// 	}
-
-	// }
-
 }

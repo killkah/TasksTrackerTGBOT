@@ -16,11 +16,13 @@ type Task struct {
 }
 
 func AddTask(userID int64, title string, done bool, db *sql.DB) {
-	_, err := db.Exec(`INSERT INTO tasks (user_id ,title, done) VALUES (?, ?, 0)`, userID, title)
+	db, err := sql.Open("sqlite", "./todo.db")
+	_, err = db.Exec(`INSERT INTO tasks (user_id ,title, done) VALUES (?, ?, 0)`, userID, title)
 	if err != nil {
 		ErrorHandler(err)
 	}
 	fmt.Println("Task added successfully.")
+	db.Close()
 }
 
 func EditTask(id int, done bool, db *sql.DB) {
@@ -32,14 +34,17 @@ func EditTask(id int, done bool, db *sql.DB) {
 }
 
 func DeleteTask(id int, userID int64, db *sql.DB) {
-	_, err := db.Exec(`DELETE FROM tasks WHERE id = ? AND user_id = ?`, id, userID)
+	db, err := sql.Open("sqlite", "./todo.db")
+	_, err = db.Exec(`DELETE FROM tasks WHERE id = ? AND user_id = ?`, id, userID)
 	if err != nil {
 		ErrorHandler(err)
 	}
 	fmt.Println("Task deleted successfully.")
+	db.Close()
 }
 
 func GetTasks(userID int64, db *sql.DB) []Task {
+	db, err := sql.Open("sqlite", "./todo.db")
 	// 1. Делаем SQL-запрос на получение всех колонок
 	rows, err := db.Query("SELECT id, user_id, title, done FROM tasks WHERE user_id = ?", userID)
 	if err != nil {
@@ -59,29 +64,43 @@ func GetTasks(userID int64, db *sql.DB) []Task {
 		}
 		tasks = append(tasks, t)
 	}
-
+	db.Close()
 	return tasks
 }
 func TaskExists(id int, userID int64, db *sql.DB) (bool, error) {
+	db, err := sql.Open("sqlite", "./todo.db")
+	if err != nil {
+		ErrorHandler(err)
+	}
 	var exists bool
 	query := "SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ? AND user_id = ?)"
-	err := db.QueryRow(query, id, userID).Scan(&exists)
+	err = db.QueryRow(query, id, userID).Scan(&exists)
+	db.Close()
 	return exists, err
+
 }
 func CheckUserConsent(userID int64, db *sql.DB) (bool, error) {
+	db, err := sql.Open("sqlite", "./todo.db")
 	var accepted bool
-	err := db.QueryRow("SELECT accepted_terms FROM users WHERE user_id = ?", userID).Scan(&accepted)
+	err = db.QueryRow("SELECT accepted_terms FROM users WHERE user_id = ?", userID).Scan(&accepted)
 	if err == sql.ErrNoRows {
 		return false, nil // Пользователя ещё нет в БД
 	}
+	db.Close()
 	return accepted, err
+
 }
 func SaveUserConsent(userID int64, db *sql.DB) error {
-	_, err := db.Exec(
+	db, err := sql.Open("sqlite", "./todo.db")
+	_, err = db.Exec(
 		"INSERT INTO users (user_id, accepted_terms, accepted_at) VALUES (?, 1, CURRENT_TIMESTAMP) "+
 			"ON CONFLICT(user_id) DO UPDATE SET accepted_terms = 1, accepted_at = CURRENT_TIMESTAMP",
 		userID,
 	)
+	if err != nil {
+		ErrorHandler(err)
+	}
+	db.Close()
 	return err
 }
 func ErrorHandler(err error) {
