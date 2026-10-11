@@ -41,13 +41,15 @@ func HandleStart(bot *tgbotapi.BotAPI, chatID int64, userID int64, db *sql.DB) {
 		)
 		msg.ReplyMarkup = keyboard
 		bot.Send(msg)
+	} else {
+		welcomeMsg := tgbotapi.NewMessage(chatID, "👋 Привет! Я твой таск-менеджер.\n\n"+
+			"Команды:\n"+
+			"📋 /tasks — Посмотреть все задачи\n"+
+			"➕ /add Текст — Добавить новую задачу\n"+
+			"/edit ID - Изменить статус задачи\n"+
+			"❌ /delete ID — Удалить задачу по ID")
+		bot.Send(welcomeMsg)
 	}
-	welcomeMsg := tgbotapi.NewMessage(chatID, "👋 Привет! Я твой таск-менеджер.\n\n"+
-		"Команды:\n"+
-		"📋 /tasks — Посмотреть все задачи\n"+
-		"➕ /add Текст — Добавить новую задачу\n"+
-		"❌ /delete ID — Удалить задачу по ID")
-	bot.Send(welcomeMsg)
 
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 
 	//"net/http"
 	//"net/url"
@@ -131,11 +132,41 @@ func PrintTasks(tasks []Task, chatID int64, bot *tgbotapi.BotAPI) {
 			status = "✅"
 		}
 
-		response.WriteString(fmt.Sprintf("%d %s - %s\n", task.TaskId, task.Title, status))
+		emojiID := IntToEmojiFormat(task.TaskId)
+		response.WriteString(fmt.Sprintf("%s %s - %s\n", emojiID, task.Title, status))
 	}
 	msg := tgbotapi.NewMessage(chatID, response.String())
 	bot.Send(msg)
 }
 func ErrorHandler(err error) {
 	fmt.Println("An error occurred:", err)
+}
+
+// IntToEmojiFormat переводит обычное число в строку с эмодзи-цифрами
+func IntToEmojiFormat(n int) string {
+	digits := map[rune]string{
+		'0': "0️⃣",
+		'1': "1️⃣",
+		'2': "2️⃣",
+		'3': "3️⃣",
+		'4': "4️⃣",
+		'5': "5️⃣",
+		'6': "6️⃣",
+		'7': "7️⃣",
+		'8': "8️⃣",
+		'9': "9️⃣",
+	}
+
+	strNum := strconv.Itoa(n)
+	var result strings.Builder
+
+	for _, char := range strNum {
+		if emoji, ok := digits[char]; ok {
+			result.WriteString(emoji)
+		} else {
+			result.WriteRune(char)
+		}
+	}
+
+	return result.String()
 }
