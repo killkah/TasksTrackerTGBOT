@@ -4,6 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 
+	//"net/http"
+	//"net/url"
+
+	"strings"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	_ "modernc.org/sqlite" // Импорт Pure-Go драйвера
 )
 
@@ -17,7 +23,6 @@ type Task struct {
 }
 
 func AddTask(userID int64, title string, done bool, db *sql.DB) {
-	db, err := sql.Open("sqlite", "./todo.db")
 	tasks := GetTasks(userID, db)
 	maxId := 0
 	for _, task := range tasks {
@@ -25,7 +30,7 @@ func AddTask(userID int64, title string, done bool, db *sql.DB) {
 			maxId = task.TaskId
 		}
 	}
-	_, err = db.Exec(`
+	_, err := db.Exec(`
     INSERT INTO tasks (task_id, user_id, title, done) 
     VALUES (
         COALESCE((SELECT MAX(task_id) FROM tasks WHERE user_id = ?), 0) + 1, 
@@ -36,7 +41,6 @@ func AddTask(userID int64, title string, done bool, db *sql.DB) {
 		ErrorHandler(err)
 	}
 	fmt.Println("Task added successfully.")
-	db.Close()
 }
 
 func EditTask(user_id int64, task_id int, done bool, db *sql.DB) {
@@ -48,8 +52,7 @@ func EditTask(user_id int64, task_id int, done bool, db *sql.DB) {
 }
 
 func DeleteTask(user_id int64, task_id int, db *sql.DB) {
-	db, err := sql.Open("sqlite", "./todo.db")
-	_, err = db.Exec(`DELETE FROM tasks WHERE task_id = ? AND user_id = ?`, task_id, user_id)
+	_, err := db.Exec(`DELETE FROM tasks WHERE task_id = ? AND user_id = ?`, task_id, user_id)
 	if err != nil {
 		ErrorHandler(err)
 	}
@@ -58,7 +61,6 @@ func DeleteTask(user_id int64, task_id int, db *sql.DB) {
 		ErrorHandler(err)
 	}
 	fmt.Println("Task deleted successfully.")
-	db.Close()
 }
 
 func GetTasks(userID int64, db *sql.DB) []Task {
@@ -86,31 +88,26 @@ func GetTasks(userID int64, db *sql.DB) []Task {
 	return tasks
 }
 func TaskExists(task_id int, userID int64, db *sql.DB) (bool, error) {
-	db, err := sql.Open("sqlite", "./todo.db")
+	var exists bool
+	query := "SELECT EXISTS(SELECT 1 FROM tasks WHERE task_id = ? AND user_id = ?)"
+	err := db.QueryRow(query, task_id, userID).Scan(&exists)
 	if err != nil {
 		ErrorHandler(err)
 	}
-	var exists bool
-	query := "SELECT EXISTS(SELECT 1 FROM tasks WHERE task_id = ? AND user_id = ?)"
-	err = db.QueryRow(query, task_id, userID).Scan(&exists)
-	db.Close()
 	return exists, err
 
 }
 func CheckUserConsent(userID int64, db *sql.DB) (bool, error) {
-	db, err := sql.Open("sqlite", "./todo.db")
 	var accepted bool
-	err = db.QueryRow("SELECT accepted_terms FROM users WHERE user_id = ?", userID).Scan(&accepted)
+	err := db.QueryRow("SELECT accepted_terms FROM users WHERE user_id = ?", userID).Scan(&accepted)
 	if err == sql.ErrNoRows {
 		return false, nil // Пользователя ещё нет в БД
 	}
-	db.Close()
 	return accepted, err
 
 }
 func SaveUserConsent(userID int64, db *sql.DB) error {
-	db, err := sql.Open("sqlite", "./todo.db")
-	_, err = db.Exec(
+	_, err := db.Exec(
 		"INSERT INTO users (user_id, accepted_terms, accepted_at) VALUES (?, 1, CURRENT_TIMESTAMP) "+
 			"ON CONFLICT(user_id) DO UPDATE SET accepted_terms = 1, accepted_at = CURRENT_TIMESTAMP",
 		userID,
@@ -118,8 +115,26 @@ func SaveUserConsent(userID int64, db *sql.DB) error {
 	if err != nil {
 		ErrorHandler(err)
 	}
-	db.Close()
 	return err
+}
+func PrintTasks(tasks []Task, chatID int64, bot *tgbotapi.BotAPI) {
+	if len(tasks) == 0 {
+		msg := tgbotapi.NewMessage(chatID, "📋 Список задач пуст.")
+		bot.Send(msg)
+		return
+	}
+	var response strings.Builder
+	response.WriteString("📋 Ваши задачи:\n\n")
+	for _, task := range tasks {
+		status := "❌"
+		if task.Done {
+			status = "✅"
+		}
+
+		response.WriteString(fmt.Sprintf("%d %s - %s\n", task.TaskId, task.Title, status))
+	}
+	msg := tgbotapi.NewMessage(chatID, response.String())
+	bot.Send(msg)
 }
 func ErrorHandler(err error) {
 	fmt.Println("An error occurred:", err)
