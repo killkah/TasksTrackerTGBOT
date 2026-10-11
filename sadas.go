@@ -11,13 +11,27 @@ import (
 type Task struct {
 	ID     int
 	UserId int64
+	TaskId int
 	Title  string
 	Done   bool
 }
 
 func AddTask(userID int64, title string, done bool, db *sql.DB) {
 	db, err := sql.Open("sqlite", "./todo.db")
-	_, err = db.Exec(`INSERT INTO tasks (user_id ,title, done) VALUES (?, ?, 0)`, userID, title)
+	tasks := GetTasks(userID, db)
+	maxId := 0
+	for _, task := range tasks {
+		if task.TaskId > maxId {
+			maxId = task.TaskId
+		}
+	}
+	_, err = db.Exec(`
+    INSERT INTO tasks (task_id, user_id, title, done) 
+    VALUES (
+        COALESCE((SELECT MAX(task_id) FROM tasks WHERE user_id = ?), 0) + 1, 
+        ?, ?, 0
+    )
+	`, userID, userID, title)
 	if err != nil {
 		ErrorHandler(err)
 	}
@@ -25,17 +39,21 @@ func AddTask(userID int64, title string, done bool, db *sql.DB) {
 	db.Close()
 }
 
-func EditTask(id int, done bool, db *sql.DB) {
-	_, err := db.Exec(`UPDATE tasks SET done = ? WHERE id = ?`, done, id)
+func EditTask(user_id int64, task_id int, done bool, db *sql.DB) {
+	_, err := db.Exec(`UPDATE tasks SET done = ? WHERE task_id = ? AND user_id = ?`, done, task_id, user_id)
 	if err != nil {
 		ErrorHandler(err)
 	}
 	fmt.Println("Task updated successfully.")
 }
 
-func DeleteTask(id int, userID int64, db *sql.DB) {
+func DeleteTask(user_id int64, task_id int, db *sql.DB) {
 	db, err := sql.Open("sqlite", "./todo.db")
-	_, err = db.Exec(`DELETE FROM tasks WHERE id = ? AND user_id = ?`, id, userID)
+	_, err = db.Exec(`DELETE FROM tasks WHERE task_id = ? AND user_id = ?`, task_id, user_id)
+	if err != nil {
+		ErrorHandler(err)
+	}
+	_, err = db.Exec("UPDATE tasks SET task_id = task_id - 1 WHERE user_id = ? AND task_id > ?", user_id, task_id)
 	if err != nil {
 		ErrorHandler(err)
 	}
@@ -44,9 +62,9 @@ func DeleteTask(id int, userID int64, db *sql.DB) {
 }
 
 func GetTasks(userID int64, db *sql.DB) []Task {
-	db, err := sql.Open("sqlite", "./todo.db")
+
 	// 1. Делаем SQL-запрос на получение всех колонок
-	rows, err := db.Query("SELECT id, user_id, title, done FROM tasks WHERE user_id = ?", userID)
+	rows, err := db.Query("SELECT task_id, user_id, title, done FROM tasks WHERE user_id = ?", userID)
 	if err != nil {
 		ErrorHandler(err)
 	}
@@ -58,23 +76,23 @@ func GetTasks(userID int64, db *sql.DB) []Task {
 	for rows.Next() {
 		var t Task
 		// Scan считывает значения из БД в поля нашей структуры
-		err := rows.Scan(&t.ID, &userID, &t.Title, &t.Done)
+		err := rows.Scan(&t.TaskId, &userID, &t.Title, &t.Done)
 		if err != nil {
 			ErrorHandler(err)
 		}
 		tasks = append(tasks, t)
 	}
-	db.Close()
+
 	return tasks
 }
-func TaskExists(id int, userID int64, db *sql.DB) (bool, error) {
+func TaskExists(task_id int, userID int64, db *sql.DB) (bool, error) {
 	db, err := sql.Open("sqlite", "./todo.db")
 	if err != nil {
 		ErrorHandler(err)
 	}
 	var exists bool
-	query := "SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ? AND user_id = ?)"
-	err = db.QueryRow(query, id, userID).Scan(&exists)
+	query := "SELECT EXISTS(SELECT 1 FROM tasks WHERE task_id = ? AND user_id = ?)"
+	err = db.QueryRow(query, task_id, userID).Scan(&exists)
 	db.Close()
 	return exists, err
 

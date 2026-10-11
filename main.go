@@ -30,7 +30,7 @@ func PrintTasks(tasks []Task, chatID int64, bot *tgbotapi.BotAPI) {
 			status = "✅"
 		}
 
-		response.WriteString(fmt.Sprintf("%d %s - %s\n", task.ID, task.Title, status))
+		response.WriteString(fmt.Sprintf("%d %s - %s\n", task.TaskId, task.Title, status))
 	}
 	msg := tgbotapi.NewMessage(chatID, response.String())
 	bot.Send(msg)
@@ -54,6 +54,7 @@ func main() {
 	createTableQuery := `
 	CREATE TABLE IF NOT EXISTS tasks (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id INTEGER NOT NULL,
 		user_id INTEGER NOT NULL,
 		title TEXT NOT NULL,
 		done BOOLEAN NOT NULL DEFAULT 0
@@ -159,11 +160,29 @@ func main() {
 			bot.Send(msg)
 			continue
 		}
-		// Обработка команд
+		// Константы кнопок
+		const (
+			BtnTasks  = "📋 Мои задачи"
+			BtnAdd    = "➕ Добавить задачу"
+			BtnDelete = "❌ Удалить задачу"
+		)
+
+		// Главная клавиатура
+		var mainKeyboard = tgbotapi.NewReplyKeyboard(
+			tgbotapi.NewKeyboardButtonRow(
+				tgbotapi.NewKeyboardButton(BtnTasks),
+				tgbotapi.NewKeyboardButton(BtnAdd),
+			),
+			tgbotapi.NewKeyboardButtonRow(
+				tgbotapi.NewKeyboardButton(BtnDelete),
+			),
+		)
+
+		// В твоем switch меняем только условия проверки для кнопок:
+
 		switch {
 		// Команда /start
 		case text == "/start":
-			// Проверяем в БД, давал ли пользователь согласие ранее
 			accepted, err := CheckUserConsent(userID, db)
 			if err != nil {
 				bot.Send(tgbotapi.NewMessage(chatID, "Ошибка проверки профиля."))
@@ -180,7 +199,6 @@ func main() {
 				msg := tgbotapi.NewMessage(chatID, msgText)
 				msg.ParseMode = "Markdown"
 
-				// Создаём Inline-кнопку для акцепта
 				keyboard := tgbotapi.NewInlineKeyboardMarkup(
 					tgbotapi.NewInlineKeyboardRow(
 						tgbotapi.NewInlineKeyboardButtonData("✅ Принять условия", "accept_terms"),
@@ -191,22 +209,42 @@ func main() {
 				continue
 			}
 
-			// Если уже давал согласие — выводим стандартную справку
+			// Отправляем приветствие и прикрепляем ReplyKeyboard
 			msg := tgbotapi.NewMessage(chatID, "👋 Привет! Я твой таск-менеджер.\n\n"+
 				"Команды:\n"+
 				"📋 /tasks — Посмотреть все задачи\n"+
 				"➕ /add Текст — Добавить новую задачу\n"+
 				"❌ /delete ID — Удалить задачу по ID")
+			msg.ReplyMarkup = mainKeyboard
 			bot.Send(msg)
-		// Команда /tasks
-		case strings.HasPrefix(text, "/tasks"):
+
+		// Команда /tasks ИЛИ нажатие кнопки "📋 Мои задачи"
+		case text == BtnTasks || strings.HasPrefix(text, "/tasks"):
+			db, err := sql.Open("sqlite", "./todo.db")
+			if err != nil {
+				ErrorHandler(err)
+			}
 			tasks := GetTasks(userID, db)
 			if len(tasks) == 0 {
 				msg := tgbotapi.NewMessage(chatID, "У вас нет задач.")
 				bot.Send(msg)
 			}
+			db.Close()
 			PrintTasks(tasks, chatID, bot)
-		//  Команда /add
+
+		// Реакция на нажатие кнопки "➕ Добавить задачу" (подсказывает формат)
+		case text == BtnAdd:
+			msg := tgbotapi.NewMessage(chatID, "Чтобы добавить задачу, отправьте сообщение формата:\n`/add Текст задачи`")
+			msg.ParseMode = "Markdown"
+			bot.Send(msg)
+
+		// Реакция на нажатие кнопки "❌ Удалить задачу" (подсказывает формат)
+		case text == BtnDelete:
+			msg := tgbotapi.NewMessage(chatID, "Чтобы удалить задачу, отправьте сообщение формата:\n`/delete ID`")
+			msg.ParseMode = "Markdown"
+			bot.Send(msg)
+
+		// Команда /add
 		case strings.HasPrefix(text, "/add "):
 			title := strings.TrimPrefix(text, "/add ")
 			title = strings.TrimSpace(title)
@@ -223,6 +261,7 @@ func main() {
 			AddTask(userID, title, false, db)
 			msg := tgbotapi.NewMessage(chatID, "Задача добавлена: "+title)
 			bot.Send(msg)
+
 		// Команда /edit
 		case strings.HasPrefix(text, "/edit "):
 			db, err := sql.Open("sqlite", "./todo.db")
@@ -232,10 +271,8 @@ func main() {
 				msg := tgbotapi.NewMessage(chatID, "Укажите название задачи которую хотите изменить после /edit.")
 				bot.Send(msg)
 				continue
-
 			}
 			id, err := strconv.Atoi(idStr)
-			// 1. Проверяем существование записи
 			exists, err := TaskExists(id, userID, db)
 			if err != nil {
 				bot.Send(tgbotapi.NewMessage(chatID, "Ошибка при проверке базы данных."))
@@ -246,15 +283,15 @@ func main() {
 				bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("⚠️ Задачи с ID #%d у вас не существует!", id)))
 				continue
 			}
-			rows, err := db.Query("SELECT id, title, done FROM tasks WHERE id = ?", id)
+			rows, err := db.Query("SELECT task_id, title, done FROM tasks WHERE task_id = ? AND user_id = ?", id, userID)
 			if err != nil {
 				ErrorHandler(err)
 			}
-			defer rows.Close() // Обязательно закрываем rows после работы
+			defer rows.Close()
 			var tasks []Task
 			for rows.Next() {
 				var t Task
-				err := rows.Scan(&t.ID, &t.Title, &t.Done)
+				err := rows.Scan(&t.TaskId, &t.Title, &t.Done)
 				if err != nil {
 					ErrorHandler(err)
 					continue
@@ -266,16 +303,16 @@ func main() {
 			} else {
 				tasks[0].Done = false
 			}
-			EditTask(tasks[0].ID, tasks[0].Done, db)
+			EditTask(userID, tasks[0].TaskId, tasks[0].Done, db)
 			db.Close()
 			msg := tgbotapi.NewMessage(chatID, "Задача успешно обновлена")
 			bot.Send(msg)
+
 		// Команда /delete
 		case strings.HasPrefix(text, "/delete "):
 			idStr := strings.TrimPrefix(text, "/delete ")
 			idStr = strings.TrimSpace(idStr)
 			id, err := strconv.Atoi(idStr)
-			// 1. Проверяем существование записи
 			exists, err := TaskExists(id, userID, db)
 			if err != nil {
 				bot.Send(tgbotapi.NewMessage(chatID, "Ошибка при проверке базы данных."))
@@ -291,9 +328,10 @@ func main() {
 				bot.Send(msg)
 				continue
 			}
-			DeleteTask(id, userID, db)
+			DeleteTask(userID, id, db)
 			msg := tgbotapi.NewMessage(chatID, "Задача удалена.")
 			bot.Send(msg)
+
 		case text == "/privacy":
 			privacyMsg := "🔒 *Политика конфиденциальности*\n\n" +
 				"Мы храним только ваш Telegram ID и тексты созданных задач для работы списка дел.\n" +
