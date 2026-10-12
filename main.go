@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
@@ -86,6 +85,16 @@ func main() {
 		BtnAdd    = "➕ Добавить задачу"
 		BtnDelete = "❌ Удалить задачу"
 	)
+	// Константы шагов/состояний
+	const (
+		StateNone         = ""
+		StateAwaitingAdd  = "awaiting_add"
+		StateAwaitingEdit = "awaiting_edit"
+		StateAwaitingDel  = "awaiting_del"
+	)
+
+	// Карта для хранения состояния каждого пользователя
+	var userStates = make(map[int64]string)
 	// 4. Бесконечный цикл обработки входящих сообщений
 	for update := range updates {
 		// 1. ОБРАБОТКА НАЖАТИЯ INLINE-КНОПОК (CallbackQuery)
@@ -146,40 +155,48 @@ func main() {
 			continue
 		}
 
-		// В твоем switch меняем только условия проверки для кнопок:
+		// 1. ПРОВЕРКА СОСТОЯНИЯ: Ждем ли мы текстовый ввод от этого пользователя?
+		currentState := userStates[userID]
 
+		if currentState != StateNone {
+			// Пользователь прислал текст в ответ на ожидание!
+			switch currentState {
+
+			case StateAwaitingAdd:
+				// Вызываем функцию добавления задачи, передавая 'text' как название
+				HandleAddTask(text, bot, chatID, userID, db)
+				// Сбрасываем состояние
+				userStates[userID] = StateNone
+
+			case StateAwaitingDel:
+				// Вызываем функцию удаления
+				HandleDeleteTask(text, bot, chatID, userID, db)
+				userStates[userID] = StateNone
+
+			case StateAwaitingEdit:
+				// Вызываем функцию редактирования
+				HandleEditTask(text, bot, chatID, userID, db)
+				userStates[userID] = StateNone
+			}
+
+			// Завершаем обработку этого сообщения, чтобы не идти в стандартный switch
+			continue
+		}
+
+		// 2. СТАНДАРТНЫЙ SWITCH (когда нет активного состояния)
 		switch {
-		// Команда /start
 		case text == "/start":
 			HandleStart(bot, chatID, userID, db)
-
-		// Команда /tasks ИЛИ нажатие кнопки "📋 Мои задачи"
-		case text == BtnTasks || strings.HasPrefix(text, "/tasks"):
+		case text == "/tasks" || text == BtnTasks:
 			HandlePrintTasks(bot, chatID, userID, db)
+		case text == "/add" || text == BtnAdd:
+			// Ставим пользователя в состояние ожидания текста
+			userStates[userID] = StateAwaitingAdd
+			bot.Send(tgbotapi.NewMessage(chatID, "📝 Отправьте текст для новой задачи:"))
 
-		// Реакция на нажатие кнопки "➕ Добавить задачу" (подсказывает формат)
-		case text == BtnAdd:
-			msg := tgbotapi.NewMessage(chatID, "Чтобы добавить задачу, отправьте сообщение формата:\n`/add Текст задачи`")
-			msg.ParseMode = "Markdown"
-			bot.Send(msg)
-
-		// Реакция на нажатие кнопки "❌ Удалить задачу" (подсказывает формат)
-		case text == BtnDelete:
-			msg := tgbotapi.NewMessage(chatID, "Чтобы удалить задачу, отправьте сообщение формата:\n`/delete ID`")
-			msg.ParseMode = "Markdown"
-			bot.Send(msg)
-
-		// Команда /add
-		case strings.HasPrefix(text, "/add "):
-			HandleAddTask(text, bot, chatID, userID, db)
-
-		// Команда /edit
-		case strings.HasPrefix(text, "/edit "):
-			HandleEditTask(text, bot, chatID, userID, db)
-
-		// Команда /delete
-		case strings.HasPrefix(text, "/delete "):
-			HandleDeleteTask(text, bot, chatID, userID, db)
+		case text == "/delete" || text == BtnDelete:
+			userStates[userID] = StateAwaitingDel
+			bot.Send(tgbotapi.NewMessage(chatID, "❌ Введите ID задачи, которую нужно удалить:"))
 
 		case text == "/privacy":
 			privacyMsg := "🔒 *Политика конфиденциальности*\n\n" +
