@@ -83,6 +83,7 @@ func main() {
 	const (
 		BtnTasks  = "📋 Мои задачи"
 		BtnAdd    = "➕ Добавить задачу"
+		BtnEdit   = "🆙 Обновить задачу"
 		BtnDelete = "❌ Удалить задачу"
 	)
 	// Константы шагов/состояний
@@ -126,9 +127,10 @@ func main() {
 				welcomeMsg := tgbotapi.NewMessage(chatID, "👋 Привет! Я твой таск-менеджер.\n\n"+
 					"Команды:\n"+
 					"📋 /tasks — Посмотреть все задачи\n"+
-					"➕ /add Текст — Добавить новую задачу\n"+
-					"/edit ID - Изменить статус задачи\n"+
-					"❌ /delete ID — Удалить задачу по ID")
+					"➕ /add — Добавить новую задачу\n"+
+					"🆙/edit - Изменить статус задачи\n"+
+					"❌ /delete — Удалить задачу по ID")
+				welcomeMsg.ReplyMarkup = mainKeyboard // ✅ Добавляем нижнее меню после принятия условий
 				bot.Send(welcomeMsg)
 			}
 			continue // Переходим к следующему update
@@ -193,7 +195,9 @@ func main() {
 			// Ставим пользователя в состояние ожидания текста
 			userStates[userID] = StateAwaitingAdd
 			bot.Send(tgbotapi.NewMessage(chatID, "📝 Отправьте текст для новой задачи:"))
-
+		case text == "/edit" || text == BtnEdit:
+			userStates[userID] = StateAwaitingEdit
+			bot.Send(tgbotapi.NewMessage(chatID, "🆙 Введите ID задачи, которую нужно изменить:"))
 		case text == "/delete" || text == BtnDelete:
 			userStates[userID] = StateAwaitingDel
 			bot.Send(tgbotapi.NewMessage(chatID, "❌ Введите ID задачи, которую нужно удалить:"))

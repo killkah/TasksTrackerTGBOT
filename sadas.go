@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"strconv"
 
-	//"net/http"
-	//"net/url"
-
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -31,13 +28,15 @@ func AddTask(userID int64, title string, done bool, db *sql.DB) {
 			maxId = task.TaskId
 		}
 	}
-	_, err := db.Exec(`
+	key, err := GetEncryptionKey()
+	encryptedTitle, err := Encrypt(title, key)
+	_, err = db.Exec(`
     INSERT INTO tasks (task_id, user_id, title, done) 
     VALUES (
         COALESCE((SELECT MAX(task_id) FROM tasks WHERE user_id = ?), 0) + 1, 
         ?, ?, 0
     )
-	`, userID, userID, title)
+	`, userID, userID, encryptedTitle)
 	if err != nil {
 		ErrorHandler(err)
 	}
@@ -74,12 +73,16 @@ func GetTasks(userID int64, db *sql.DB) []Task {
 	defer rows.Close() // Закрываем результат запроса после завершения функции
 
 	var tasks []Task
-
+	key, err := GetEncryptionKey()
 	// 2. Проходимся циклом по каждой строчке из БД
 	for rows.Next() {
 		var t Task
+
 		// Scan считывает значения из БД в поля нашей структуры
 		err := rows.Scan(&t.TaskId, &userID, &t.Title, &t.Done)
+
+		decryptedTitle, err := Decrypt(t.Title, key)
+		t.Title = decryptedTitle
 		if err != nil {
 			ErrorHandler(err)
 		}

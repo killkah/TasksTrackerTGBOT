@@ -14,6 +14,8 @@ var mainKeyboard = tgbotapi.NewReplyKeyboard(
 	tgbotapi.NewKeyboardButtonRow(
 		tgbotapi.NewKeyboardButton("📋 Мои задачи"),
 		tgbotapi.NewKeyboardButton("➕ Добавить задачу"),
+		tgbotapi.NewKeyboardButton("🆙 Обновить задачу"),
+		tgbotapi.NewKeyboardButton("❌ Удалить задачу"),
 	),
 )
 
@@ -39,6 +41,7 @@ func HandleStart(bot *tgbotapi.BotAPI, chatID int64, userID int64, db *sql.DB) {
 				tgbotapi.NewInlineKeyboardButtonData("✅ Принять условия", "accept_terms"),
 			),
 		)
+
 		msg.ReplyMarkup = keyboard
 		bot.Send(msg)
 	} else {
@@ -48,7 +51,9 @@ func HandleStart(bot *tgbotapi.BotAPI, chatID int64, userID int64, db *sql.DB) {
 			"➕ /add Текст — Добавить новую задачу\n"+
 			"/edit ID - Изменить статус задачи\n"+
 			"❌ /delete ID — Удалить задачу по ID")
+		welcomeMsg.ReplyMarkup = mainKeyboard
 		bot.Send(welcomeMsg)
+
 	}
 
 }
